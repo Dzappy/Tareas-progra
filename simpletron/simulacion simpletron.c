@@ -70,7 +70,7 @@ start_execution:
 
         instructionRegister = memory[instructionCounter];
         operationCode = instructionRegister / 100;
-        operand = instructionRegister % 1000;  // ahora operand puede ser hasta 999
+        operand = instructionRegister % 1000;
 
         if (operand < 0 || operand >= MEM_SIZE) {
             printf("Error: operando fuera de rango en instruccion %03d.\n", instructionCounter);
@@ -159,6 +159,31 @@ start_execution:
                 }
                 instructionCounter++;
                 break;
+
+            case 35: /* exponenciacion */
+            {
+                int base = accumulator;
+                int exp = memory[operand];
+                int result = 1;
+                int k;  // declaración fuera del for
+
+                if (exp < 0) {
+                    printf("Error: exponente negativo no soportado.\n");
+                    goto dump_and_exit;
+                }
+
+                for (k = 0; k < exp; k++) {
+                    result *= base;
+                    if (result < MIN_WORD || result > 9999) {
+                        printf("Error: desbordamiento en exponenciacion.\n");
+                        goto dump_and_exit;
+                    }
+                }
+
+                accumulator = result;
+                instructionCounter++;
+                break;
+            }
 
             case 40: /* bifurcar incondicional */
                 instructionCounter = operand;
