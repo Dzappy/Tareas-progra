@@ -38,7 +38,7 @@ int main(void)
 
         for (i = 0; i < MEM_SIZE; ++i) {
             while (1) {
-                printf("%03d ? ", i);  // ahora imprime 3 dígitos
+                printf("%03d ? ", i);
                 if (scanf("%d", &input) != 1) {
                     int c;
                     while ((c = getchar()) != '\n' && c != EOF) { }
@@ -140,6 +140,19 @@ start_execution:
 
             case 33: /* multiplicar */
                 accumulator *= memory[operand];
+                if (accumulator < MIN_WORD || accumulator > 9999) {
+                    printf("Error: desbordamiento del acumulador.\n");
+                    goto dump_and_exit;
+                }
+                instructionCounter++;
+                break;
+
+            case 34: /* modulo */
+                if (memory[operand] == 0) {
+                    printf("** Intento de modulo con divisor cero **\n");
+                    goto dump_and_exit;
+                }
+                accumulator %= memory[operand];
                 if (accumulator < MIN_WORD || accumulator > 9999) {
                     printf("Error: desbordamiento del acumulador.\n");
                     goto dump_and_exit;
