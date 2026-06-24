@@ -106,6 +106,27 @@ start_execution:
                 instructionCounter++;
                 break;
 
+            case 13: /* leer cadena */
+            {
+                char buffer[256];
+                int len, j;
+                printf("Entrada de cadena (max 255 chars): ");
+                scanf(" %[^\n]", buffer);
+                len = 0;
+                while (buffer[len] != '\0' && len < 255) len++;
+
+                memory[operand] = len;  // longitud
+                for (j = 0; j < len; j++) {
+                    if (operand + 1 + j >= MEM_SIZE) {
+                        printf("Error: cadena excede memoria.\n");
+                        goto dump_and_exit;
+                    }
+                    memory[operand + 1 + j] = (int)buffer[j]; // ASCII decimal
+                }
+                instructionCounter++;
+                break;
+            }
+
             case 20: /* cargar */
                 accumulator = memory[operand];
                 instructionCounter++;
@@ -170,7 +191,7 @@ start_execution:
                 int base = accumulator;
                 int exp = memory[operand];
                 int result = 1;
-                int k;  // declaración fuera del for
+                int k;
 
                 if (exp < 0) {
                     printf("Error: exponente negativo no soportado.\n");
