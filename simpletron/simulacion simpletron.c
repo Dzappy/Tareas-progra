@@ -101,6 +101,11 @@ start_execution:
                 instructionCounter++;
                 break;
 
+            case 12: /* nueva linea */
+                printf("\n");
+                instructionCounter++;
+                break;
+
             case 20: /* cargar */
                 accumulator = memory[operand];
                 instructionCounter++;
