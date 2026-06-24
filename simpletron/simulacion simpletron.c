@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define MEM_SIZE 100
+#define MEM_SIZE 1000
 #define MIN_WORD -9999
 #define MAX_WORD  9998
 
@@ -32,14 +32,13 @@ int main(void)
         fclose(fp);
         printf("Programa cargado desde archivo.\n");
     } else {
-        /* Fase de carga interactiva */
         printf("¡ Bienvenido a Simpletron!\n");
         printf("Introduzca su programa una instruccion (o palabra de datos) a la vez.\n");
         printf("Teclee 9999 para terminar la carga.\n\n");
 
         for (i = 0; i < MEM_SIZE; ++i) {
             while (1) {
-                printf("%02d ? ", i);
+                printf("%03d ? ", i);  // ahora imprime 3 dígitos
                 if (scanf("%d", &input) != 1) {
                     int c;
                     while ((c = getchar()) != '\n' && c != EOF) { }
@@ -63,7 +62,6 @@ int main(void)
 start_execution:
     printf("** Comienza la ejecucion del programa **\n\n");
 
-    /* Ciclo de ejecucion */
     while (1) {
         if (instructionCounter < 0 || instructionCounter >= MEM_SIZE) {
             printf("Error: instructionCounter fuera de rango.\n");
@@ -72,10 +70,10 @@ start_execution:
 
         instructionRegister = memory[instructionCounter];
         operationCode = instructionRegister / 100;
-        operand = instructionRegister % 100;
+        operand = instructionRegister % 1000;  // ahora operand puede ser hasta 999
 
         if (operand < 0 || operand >= MEM_SIZE) {
-            printf("Error: operando fuera de rango en instruccion %02d.\n", instructionCounter);
+            printf("Error: operando fuera de rango en instruccion %03d.\n", instructionCounter);
             break;
         }
 
@@ -83,7 +81,7 @@ start_execution:
 
         switch (operationCode) {
             case 10: /* leer */
-                printf("Entrada para la posicion %02d: ", operand);
+                printf("Entrada para la posicion %03d: ", operand);
                 if (scanf("%d", &input) != 1) {
                     int c;
                     while ((c = getchar()) != '\n' && c != EOF) { }
@@ -172,31 +170,29 @@ start_execution:
                 goto dump_and_exit;
 
             default:
-                printf("Error: codigo de operacion invalido (%d) en %02d.\n", operationCode, instructionCounter);
+                printf("Error: codigo de operacion invalido (%d) en %03d.\n", operationCode, instructionCounter);
                 goto dump_and_exit;
         }
     }
 
 dump_and_exit:
-    /* Vaciado de memoria y registros */
     printf("\nREGISTROS:\n");
     printf("acumulador: %+05d\n", accumulator);
-    printf("instructionCounter: %02d\n", instructionCounter);
+    printf("instructionCounter: %03d\n", instructionCounter);
     printf("instructionRegister: %+05d\n", instructionRegister);
     printf("operationCode: %02d\n", operationCode);
-    printf("operand: %02d\n\n", operand);
+    printf("operand: %03d\n\n", operand);
 
     printf("MEMORIA:\n");
     for (i = 0; i < MEM_SIZE; i += 10) {
         int j;
-        printf("%2d: ", i);
+        printf("%3d: ", i);
         for (j = 0; j < 10; ++j) {
             printf("%+05d ", memory[i + j]);
         }
         printf("\n");
     }
 
-    /* Resumen adicional */
     printf("\nResumen:\n");
     printf("Instrucciones ejecutadas: %d\n", instruccionesEjecutadas);
     printf("Ultima instruccion: %+05d\n", instructionRegister);
