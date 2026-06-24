@@ -5,7 +5,6 @@
 #define MIN_WORD -9999
 #define MAX_WORD  9998
 
-
 int main(void)
 {
     int memory[MEM_SIZE] = {0};
@@ -16,44 +15,53 @@ int main(void)
     int operand = 0;
     int input;
     int i;
+    int instruccionesEjecutadas = 0;
 
-    /* Fase de carga */
-    printf(" Bienvenido a Simpletron!\n");
-    printf("Introduzca su programa una instruccion \n");
-    printf("Teclee 9999 para terminar la carga.\n\n");
+    FILE *fp = fopen("programa.simp", "r");
+    if (fp != NULL) {
+        int pos = 0, val;
+        while (pos < MEM_SIZE && fscanf(fp, "%d", &val) == 1) {
+            if (val == 9999) break;
+            if (val < MIN_WORD || val > MAX_WORD) {
+                printf("Error: instruccion fuera de rango en archivo.\n");
+                fclose(fp);
+                return 1;
+            }
+            memory[pos++] = val;
+        }
+        fclose(fp);
+        printf("Programa cargado desde archivo.\n");
+    } else {
+        /* Fase de carga interactiva */
+        printf("¡ Bienvenido a Simpletron!\n");
+        printf("Introduzca su programa una instruccion (o palabra de datos) a la vez.\n");
+        printf("Teclee 9999 para terminar la carga.\n\n");
 
-    for (i = 0; i < MEM_SIZE; ++i) {
-        while (1) {
-            printf("%02d ? ", i);
-            if (scanf("%d", &input) != 1) {
-                /* entrada no valida: limpiar buffer y pedir de nuevo */
-                int c;
-                while ((c = getchar()) != '\n' && c != EOF) { }
-                printf("Entrada no valida. Intente de nuevo.\n");
-                continue;
+        for (i = 0; i < MEM_SIZE; ++i) {
+            while (1) {
+                printf("%02d ? ", i);
+                if (scanf("%d", &input) != 1) {
+                    int c;
+                    while ((c = getchar()) != '\n' && c != EOF) { }
+                    printf("Entrada no valida. Intente de nuevo.\n");
+                    continue;
+                }
+                if (input == 9999) {
+                    printf("Se termino de cargar el programa\n");
+                    goto start_execution;
+                }
+                if (input < MIN_WORD || input > MAX_WORD) {
+                    printf("Valor fuera de rango (%d a %d). Intente de nuevo.\n", MIN_WORD, MAX_WORD);
+                    continue;
+                }
+                memory[i] = input;
+                break;
             }
-            if (input == 9999) {
-                printf("Se termino de cargar el programa\n");
-                goto start_execution;
-            }
-            if (input < MIN_WORD || input > MAX_WORD) {
-                printf("Valor fuera de rango (%d a %d). Intente de nuevo.\n", MIN_WORD, MAX_WORD);
-                continue;
-            }
-            memory[i] = input;
-            break;
         }
     }
 
 start_execution:
     printf("** Comienza la ejecucion del programa **\n\n");
-
-    /* Inicializar registros (ya estan en 0) */
-    accumulator = 0;
-    instructionCounter = 0;
-    instructionRegister = 0;
-    operationCode = 0;
-    operand = 0;
 
     /* Ciclo de ejecucion */
     while (1) {
@@ -66,11 +74,12 @@ start_execution:
         operationCode = instructionRegister / 100;
         operand = instructionRegister % 100;
 
-        /* Asegurar operand valido cuando se use */
         if (operand < 0 || operand >= MEM_SIZE) {
             printf("Error: operando fuera de rango en instruccion %02d.\n", instructionCounter);
             break;
         }
+
+        instruccionesEjecutadas++;
 
         switch (operationCode) {
             case 10: /* leer */
@@ -159,7 +168,7 @@ start_execution:
                 break;
 
             case 43: /* alto / terminar */
-                printf("Termino la ejecucion de Simpletron\n");
+                printf("Terminó la ejecucion de Simpletron\n");
                 goto dump_and_exit;
 
             default:
@@ -186,6 +195,12 @@ dump_and_exit:
         }
         printf("\n");
     }
+
+    /* Resumen adicional */
+    printf("\nResumen:\n");
+    printf("Instrucciones ejecutadas: %d\n", instruccionesEjecutadas);
+    printf("Ultima instruccion: %+05d\n", instructionRegister);
+    printf("Acumulador final: %+05d\n", accumulator);
 
     return 0;
 }
