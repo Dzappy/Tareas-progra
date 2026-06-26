@@ -115,89 +115,96 @@ start_execution:
                 len = 0;
                 while (buffer[len] != '\0' && len < 255) len++;
 
-                memory[operand] = len;  // longitud
+                memory[operand] = len;
                 for (j = 0; j < len; j++) {
                     if (operand + 1 + j >= MEM_SIZE) {
                         printf("Error: cadena excede memoria.\n");
                         goto dump_and_exit;
                     }
-                    memory[operand + 1 + j] = (int)buffer[j]; // ASCII decimal
+                    memory[operand + 1 + j] = (int)buffer[j];
                 }
                 instructionCounter++;
                 break;
             }
 
-            case 20: /* cargar */
-                accumulator = memory[operand];
-                instructionCounter++;
-                break;
-
-            case 21: /* almacenar */
-                memory[operand] = accumulator;
-                instructionCounter++;
-                break;
-
-            case 30: /* sumar */
-                accumulator += memory[operand];
-                if (accumulator < MIN_WORD || accumulator > 9999) {
-                    printf("Error: desbordamiento del acumulador.\n");
+            case 14: /* escribir cadena */
+            {
+                int len = memory[operand];
+                int j;
+                if (len < 0 || operand + len >= MEM_SIZE) {
+                    printf("Error: direccion o longitud invalida para cadena.\n");
                     goto dump_and_exit;
                 }
+                for (j = 0; j < len; j++) {
+                    int asciiVal = memory[operand + 1 + j];
+                    if (asciiVal < 0 || asciiVal > 127) {
+                        printf("Error: valor ASCII invalido en cadena.\n");
+                        goto dump_and_exit;
+                    }
+                    printf("%c", (char)asciiVal);
+                }
+                printf("\n");
                 instructionCounter++;
                 break;
+            }
 
-            case 31: /* restar */
-                accumulator -= memory[operand];
-                if (accumulator < MIN_WORD || accumulator > 9999) {
-                    printf("Error: desbordamiento del acumulador.\n");
-                    goto dump_and_exit;
-                }
-                instructionCounter++;
-                break;
+            case 20: accumulator = memory[operand]; instructionCounter++; break;
+            case 21: memory[operand] = accumulator; instructionCounter++; break;
 
-            case 32: /* dividir */
-                if (memory[operand] == 0) {
-                    printf("** Intento de dividir entre cero **\n");
-                    goto dump_and_exit;
-                }
-                accumulator /= memory[operand];
-                instructionCounter++;
-                break;
+            case 30: accumulator += memory[operand];
+                     if (accumulator < MIN_WORD || accumulator > 9999) {
+                         printf("Error: desbordamiento del acumulador.\n");
+                         goto dump_and_exit;
+                     }
+                     instructionCounter++;
+                     break;
 
-            case 33: /* multiplicar */
-                accumulator *= memory[operand];
-                if (accumulator < MIN_WORD || accumulator > 9999) {
-                    printf("Error: desbordamiento del acumulador.\n");
-                    goto dump_and_exit;
-                }
-                instructionCounter++;
-                break;
+            case 31: accumulator -= memory[operand];
+                     if (accumulator < MIN_WORD || accumulator > 9999) {
+                         printf("Error: desbordamiento del acumulador.\n");
+                         goto dump_and_exit;
+                     }
+                     instructionCounter++;
+                     break;
 
-            case 34: /* modulo */
-                if (memory[operand] == 0) {
-                    printf("** Intento de modulo con divisor cero **\n");
-                    goto dump_and_exit;
-                }
-                accumulator %= memory[operand];
-                if (accumulator < MIN_WORD || accumulator > 9999) {
-                    printf("Error: desbordamiento del acumulador.\n");
-                    goto dump_and_exit;
-                }
-                instructionCounter++;
-                break;
+            case 32: if (memory[operand] == 0) {
+                         printf("** Intento de dividir entre cero **\n");
+                         goto dump_and_exit;
+                     }
+                     accumulator /= memory[operand];
+                     instructionCounter++;
+                     break;
 
-            case 35: /* exponenciacion */
+            case 33: accumulator *= memory[operand];
+                     if (accumulator < MIN_WORD || accumulator > 9999) {
+                         printf("Error: desbordamiento del acumulador.\n");
+                         goto dump_and_exit;
+                     }
+                     instructionCounter++;
+                     break;
+
+            case 34: if (memory[operand] == 0) {
+                         printf("** Intento de modulo con divisor cero **\n");
+                         goto dump_and_exit;
+                     }
+                     accumulator %= memory[operand];
+                     if (accumulator < MIN_WORD || accumulator > 9999) {
+                         printf("Error: desbordamiento del acumulador.\n");
+                         goto dump_and_exit;
+                     }
+                     instructionCounter++;
+                     break;
+
+            case 35:
             {
                 int base = accumulator;
                 int exp = memory[operand];
                 int result = 1;
                 int k;
-
                 if (exp < 0) {
                     printf("Error: exponente negativo no soportado.\n");
                     goto dump_and_exit;
                 }
-
                 for (k = 0; k < exp; k++) {
                     result *= base;
                     if (result < MIN_WORD || result > 9999) {
@@ -205,33 +212,15 @@ start_execution:
                         goto dump_and_exit;
                     }
                 }
-
                 accumulator = result;
                 instructionCounter++;
                 break;
             }
 
-            case 40: /* bifurcar incondicional */
-                instructionCounter = operand;
-                break;
-
-            case 41: /* bifurcar si negativo */
-                if (accumulator < 0)
-                    instructionCounter = operand;
-                else
-                    instructionCounter++;
-                break;
-
-            case 42: /* bifurcar si cero */
-                if (accumulator == 0)
-                    instructionCounter = operand;
-                else
-                    instructionCounter++;
-                break;
-
-            case 43: /* alto / terminar */
-                printf("Terminó la ejecucion de Simpletron\n");
-                goto dump_and_exit;
+            case 40: instructionCounter = operand; break;
+            case 41: if (accumulator < 0) instructionCounter = operand; else instructionCounter++; break;
+            case 42: if (accumulator == 0) instructionCounter = operand; else instructionCounter++; break;
+            case 43: printf("Terminó la ejecucion de Simpletron\n"); goto dump_and_exit;
 
             default:
                 printf("Error: codigo de operacion invalido (%d) en %03d.\n", operationCode, instructionCounter);
