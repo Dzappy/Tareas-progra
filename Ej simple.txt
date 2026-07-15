@@ -1,0 +1,93 @@
+Ej 1.
+Introducir 3 enteros, determinar su media e imprimir el resultado
+
+10 input a
+20 input b
+30 input c
+40 let suma = a + b + c
+50 let media = suma / 3
+60 print media
+70 end
+
+EJ 2.
+Usar un ciclo controlado  por variable para introducir 10 enteros y calcular e imprimir su sumatoria
+10 let i = 1
+20 let suma = 0
+30 input n
+40 let suma = suma + n
+50 let i = i + 1
+60 if i <= 10 goto 30
+70 print suma
+80 end
+
+EJ 3.
+Usar un ciclo controlado por contador para introducir siete enteros, algunos positivos y algunos negativos, y calcular e imprimir su media 
+10 let i = 1
+20 let suma = 0
+30 input n
+40 let suma = suma + n
+50 let i = i + 1
+60 if i <= 7 goto 30
+70 let media = suma / 7
+80 print media
+90 end
+
+EJ 4.
+Introducir una serie de enteros y determinar e imprimir el mayor, el primer entero introducido indicara cuantos números habrá que procesar 
+10 input cantidad
+20 let i = 1
+30 input n
+40 if i == 1 let mayor = n
+50 if n > mayor let mayor = n
+60 let i = i + 1
+70 if i <= cantidad goto 30
+80 print mayor
+90 end
+
+EJ 5.
+Introducir 10 enteros e imprimir el mas pequeño 
+10 let i = 1
+20 input n
+30 let menor = n
+40 let i = i + 1
+50 if i <= 10 goto 60
+55 goto 80
+60 input n
+70 if n < menor let menor = n
+75 goto 40
+80 print menor
+90 end
+
+EJ 6.
+Calcular e imprimir la suma de los enteros pares del 2 al 30
+10 let i = 2
+20 let suma = 0
+30 let suma = suma + i
+40 let i = i + 2
+50 if i <= 30 goto 30
+60 print suma
+70 end
+
+EJ 7.
+Calcular e imprimir el producto de los enteros impares del 1 al 9
+10 let i = 1
+20 let producto = 1
+30 let producto = producto * i
+40 let i = i + 2
+50 if i <= 9 goto 30
+60 print producto
+70 end
+
+EJ 8.
+calcular el área de un triangulo ingresando su base y altura por el usuario
+10 input base
+20 input altura
+30 let area = (base * altura) / 2
+40 print area
+50 end
+
+
+EJ 9.
+10
+
+
