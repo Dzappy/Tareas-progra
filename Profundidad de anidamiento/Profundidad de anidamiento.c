@@ -18,14 +18,13 @@ int jerarquia(char op) {
     return 0;
 }
 
-/* '^' es asociativo a la derecha: prec devuelve 1 si op1 debe salir antes que op2 */
 int prec(char op1, char op2) {
     int j1 = jerarquia(op1);
     int j2 = jerarquia(op2);
     if (j1 > j2) return 1;
     if (j1 < j2) return 0;
     /* j1 == j2 */
-    if (op1 == '^') return 0; /* no sacar op1 si es '^' (derecha) */
+    if (op1 == '^') return 0;
     return 1; /* otros: asociativos a la izquierda */
 }
 
