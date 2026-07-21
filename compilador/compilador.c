@@ -4,504 +4,508 @@
 #include <string.h>
 #include <ctype.h>
 
-#define MEM_SIZE 100
-#define LINE_MAX 256
+#define MEMSIZE 100
+#define MAXLINE 512
+#define MAXSYMS 2000
+#define MAXTOK 256
 
-/* Códigos de operación */
-enum {
-    OP_READ = 10,
-    OP_WRITE = 11,
-    OP_LOAD = 20,
-    OP_STORE = 21,
-    OP_ADD = 30,
-    OP_SUB = 31,
-    OP_BRANCH = 40,
-    OP_BRANCHNEG = 41,
-    OP_BRANCHZERO = 42,
-    OP_HALT = 43
-};
+typedef struct {
+    char symbol[32]; 
+    char type;
+    int location; 
+} TableEntry;
 
-/* Entrada de la tabla de símbolos */
-typedef struct tableEntry {
-    int symbol;             /* valor numérico para línea o ASCII para variable */
-    char type;              /* 'L' línea, 'V' variable, 'C' constante */
-    int location;           /* ubicación en memoria 0..99 */
-    struct tableEntry *next;
-} tableEntry;
+TableEntry symtab[MAXSYMS];
+int symcount = 0;
 
-tableEntry *symbolTable = NULL;
+int flags[MEMSIZE];   
+int sml[MEMSIZE];     
+int instr_count = 0; 
+int data_ptr = MEMSIZE - 1; 
 
-/* Memoria Simpletron y flags */
-int memory[MEM_SIZE];
-int flags[MEM_SIZE]; /* -1 significa resuelto, si no, almacena número de línea destino */
-int instr_ptr = 0;   /* siguiente índice de instrucción (crece desde 0) */
-int data_ptr = MEM_SIZE - 1; /* siguiente celda de datos (asignada hacia atrás) */
+/* Prototipos */
+int lookup_or_add(const char *s, char type, int add);
+int make_instr(int op, int operand);
+int precedence(const char *op);
+int is_operator_token(const char *t);
+char *infix_to_postfix(const char *expr);
+int eval_postfix_generate(char *postfix);
+void process_line_first(char *line);
+void second_pass_and_write(const char *outname);
 
-/* Buscar símbolo (opcionalmente filtrar por tipo) */
-tableEntry *find_symbol(int sym, char type_filter) {
-    tableEntry *p = symbolTable;
-    while (p) {
-        if (p->symbol == sym) {
-            if (type_filter == 0 || p->type == type_filter) return p;
+/* Buscar símbolo y si no existe y add==1 lo inserta
+   Devuelve índice en symtab o -1 si no existe y add==0 */
+int lookup_or_add(const char *s, char type, int add) {
+    int i;
+    for (i = 0; i < symcount; i++) {
+        if (strcmp(symtab[i].symbol, s) == 0) return i;
+    }
+    if (!add) return -1;
+    if (symcount >= MAXSYMS) {
+        fprintf(stderr, "Error: tabla de símbolos llena\n");
+        exit(1);
+    }
+    strcpy(symtab[symcount].symbol, s);
+    symtab[symcount].type = type;
+    if (type == 'L') {
+        symtab[symcount].location = instr_count;
+    } else {
+        symtab[symcount].location = data_ptr;
+        data_ptr--;
+        if (data_ptr < 0) {
+            fprintf(stderr, "Error: memoria de datos agotada\n");
+            exit(1);
         }
-        p = p->next;
     }
-    return NULL;
+    symcount++;
+    return symcount - 1;
 }
 
-/* Insertar símbolo en la tabla (si ya existe devuelve el existente) */
-tableEntry *insert_symbol(int sym, char type) {
-    tableEntry *existing = find_symbol(sym, 0);
-    if (existing) {
-        if (existing->location == -1 && (type == 'V' || type == 'C' || type == 'L')) {
-            existing->type = type;
-        }
-        return existing;
-    }
-    tableEntry *e = malloc(sizeof(tableEntry));
-    if (!e) { perror("malloc"); exit(EXIT_FAILURE); }
-    e->symbol = sym;
-    e->type = type;
-    e->location = -1;
-    e->next = symbolTable;
-    symbolTable = e;
-    return e;
+/* Construye instrucción SML: op*100 + operand */
+int make_instr(int op, int operand) {
+    return op * 100 + (operand % 100);
 }
 
-/* Asignar una celda de datos (variables/constantes/temporales) */
-int allocate_data_slot() {
-    if (data_ptr <= instr_ptr) {
-        fprintf(stderr, "Error: memoria agotada (colisión código/datos)\n");
-        exit(EXIT_FAILURE);
-    }
-    return data_ptr--;
-}
-
-/* Emitir instrucción en memoria */
-void emit(int opcode, int operand) {
-    if (instr_ptr < 0 || instr_ptr >= MEM_SIZE) {
-        fprintf(stderr, "Error: puntero de instrucción fuera de rango\n");
-        exit(EXIT_FAILURE);
-    }
-    int instr = opcode * 100 + operand;
-    memory[instr_ptr] = instr;
-    instr_ptr++;
-}
-
-/* Emitir bifurcación con destino de línea posiblemente no resuelto */
-void emit_branch_with_line(int opcode, int targetLine) {
-    int idx = instr_ptr;
-    emit(opcode, 0); /* operando 00 temporal */
-    flags[idx] = targetLine; /* se resolverá en la segunda pasada */
-}
-
-/* Recortar espacios al inicio y final */
-char *trim(char *s) {
-    while (isspace((unsigned char)*s)) s++;
-    if (*s == 0) return s;
-    char *end = s + strlen(s) - 1;
-    while (end > s && isspace((unsigned char)*end)) *end-- = '\0';
-    return s;
-}
-
-/* Precedencia de operadores */
-int prec(const char *op) {
+/* Precedencia extendida */
+int precedence(const char *op) {
     if (strcmp(op, "+") == 0 || strcmp(op, "-") == 0) return 1;
     if (strcmp(op, "*") == 0 || strcmp(op, "/") == 0) return 2;
     return 0;
 }
 
-/* Es operador */
-int is_op(const char *t) {
-    return (strcmp(t, "+") == 0 || strcmp(t, "-") == 0 ||
-            strcmp(t, "*") == 0 || strcmp(t, "/") == 0);
+/* Determina si token es operador aritmético */
+int is_operator_token(const char *t) {
+    return (!strcmp(t, "+") || !strcmp(t, "-") ||
+            !strcmp(t, "*") || !strcmp(t, "/"));
 }
 
-/* Convertir infijo (tokens separados por espacios) a posfijo.
-   Devuelve arreglo dinámico de cadenas terminado en NULL. */
-char **infix_to_postfix(const char *expr) {
-    char *copy = strdup(expr);
-    if (!copy) { perror("strdup"); exit(EXIT_FAILURE); }
-    char *tok;
-    char *stack[128];
+/* Convierte infija a posfija usando Shunting-Yard
+   Requiere que los tokens estén separados por espacios
+   Devuelve cadena alocada (free() por el llamador) */
+char *infix_to_postfix(const char *expr) {
+    char *copy = NULL;
+    char *token;
+    char *out = (char *)malloc(MAXLINE);
+    char *stack_ops[MAXTOK];
     int top = -1;
-    char *out[256];
-    int outi = 0;
+    int outpos = 0;
+    int len;
+
+    if (!out) { fprintf(stderr, "Memoria insuficiente\n"); exit(1); }
+    out[0] = '\0';
+
+    copy = (char *)malloc(strlen(expr) + 1);
+    if (!copy) { fprintf(stderr, "Memoria insuficiente\n"); exit(1); }
+    strcpy(copy, expr);
+
+    token = strtok(copy, " \t\r\n");
+    while (token != NULL) {
+        if (isalpha(token[0]) || isdigit(token[0]) || (token[0]=='-' && isdigit(token[1]))) {
+            /* operando: variable o constante */
+            len = strlen(token);
+            if (outpos + len + 2 >= MAXLINE) break;
+            if (outpos > 0) { out[outpos++] = ' '; }
+            strcpy(out + outpos, token);
+            outpos += len;
+        } else if (is_operator_token(token)) {
+            while (top >= 0 && is_operator_token(stack_ops[top]) &&
+                   precedence(stack_ops[top]) >= precedence(token)) {
+                len = strlen(stack_ops[top]);
+                if (outpos + len + 2 >= MAXLINE) break;
+                if (outpos > 0) { out[outpos++] = ' '; }
+                strcpy(out + outpos, stack_ops[top]);
+                outpos += len;
+                top--;
+            }
+            stack_ops[++top] = token;
+        } else if (strcmp(token, "(") == 0) {
+            stack_ops[++top] = token;
+        } else if (strcmp(token, ")") == 0) {
+            while (top >= 0 && strcmp(stack_ops[top], "(") != 0) {
+                len = strlen(stack_ops[top]);
+                if (outpos + len + 2 >= MAXLINE) break;
+                if (outpos > 0) { out[outpos++] = ' '; }
+                strcpy(out + outpos, stack_ops[top]);
+                outpos += len;
+                top--;
+            }
+            if (top >= 0 && strcmp(stack_ops[top], "(") == 0) top--;
+        } else {
+            /* token desconocido: ignorar */
+        }
+        token = strtok(NULL, " \t\r\n");
+    }
+
+    while (top >= 0) {
+        if (strcmp(stack_ops[top], "(") != 0 && strcmp(stack_ops[top], ")") != 0) {
+            len = strlen(stack_ops[top]);
+            if (outpos + len + 2 >= MAXLINE) break;
+            if (outpos > 0) { out[outpos++] = ' '; }
+            strcpy(out + outpos, stack_ops[top]);
+            outpos += len;
+        }
+        top--;
+    }
+
+    out[outpos] = '\0';
+    free(copy);
+    return out;
+}
+
+/* Evalúa expresión posfija pero en lugar de calcular produce instrucciones SML.
+   Devuelve la posición de memoria que contiene el resultado (posición temporal). */
+int eval_postfix_generate(char *postfix) {
+    int stack_pos[256];
+    int sp = 0;
+    char *copy = NULL;
+    char *tok;
+    int idx_l, idx_r;
+    int temp_loc;
+    int i;
+
+    copy = (char *)malloc(strlen(postfix) + 1);
+    if (!copy) { fprintf(stderr, "Memoria insuficiente\n"); exit(1); }
+    strcpy(copy, postfix);
 
     tok = strtok(copy, " ");
-    while (tok) {
-        if (is_op(tok)) {
-            while (top >= 0 && is_op(stack[top]) && prec(stack[top]) >= prec(tok)) {
-                out[outi++] = strdup(stack[top--]);
+    while (tok != NULL) {
+        if (isalpha(tok[0]) || isdigit(tok[0]) || (tok[0]=='-' && isdigit(tok[1]))) {
+            char ttype;
+            if (isalpha(tok[0])) ttype = 'v'; else ttype = 'c';
+            idx_l = lookup_or_add(tok, ttype, 1);
+            stack_pos[sp++] = symtab[idx_l].location;
+        } else if (is_operator_token(tok)) {
+            if (sp < 2) {
+                fprintf(stderr, "Error: expresión posfija inválida\n");
+                free(copy);
+                exit(1);
             }
-            stack[++top] = strdup(tok);
-        } else if (strcmp(tok, "(") == 0) {
-            stack[++top] = strdup(tok);
-        } else if (strcmp(tok, ")") == 0) {
-            while (top >= 0 && strcmp(stack[top], "(") != 0) {
-                out[outi++] = strdup(stack[top--]);
+            idx_r = stack_pos[--sp];
+            idx_l = stack_pos[--sp];
+            if (instr_count + 3 >= MEMSIZE) {
+                fprintf(stderr, "Error: memoria de instrucciones agotada\n");
+                free(copy);
+                exit(1);
             }
-            if (top >= 0 && strcmp(stack[top], "(") == 0) {
-                free(stack[top--]);
+            /* cargar izquierdo */
+            sml[instr_count++] = make_instr(20, idx_l); /* 20 = cargar */
+            /* operar con derecho */
+            if (strcmp(tok, "+") == 0) {
+                sml[instr_count++] = make_instr(30, idx_r); /* 30 = sumar */
+            } else if (strcmp(tok, "-") == 0) {
+                sml[instr_count++] = make_instr(31, idx_r); /* 31 = restar */
+            } else if (strcmp(tok, "*") == 0) {
+                sml[instr_count++] = make_instr(33, idx_r); /* 33 = multiplicar */
+            } else if (strcmp(tok, "/") == 0) {
+                sml[instr_count++] = make_instr(32, idx_r); /* 32 = dividir */
+            } else {
+                fprintf(stderr, "Operador no soportado: %s\n", tok);
+                free(copy);
+                exit(1);
             }
+            /* almacenar en temp */
+            temp_loc = data_ptr;
+            data_ptr--;
+            if (data_ptr < 0) {
+                fprintf(stderr, "Error: memoria de datos agotada (temporales)\n");
+                free(copy);
+                exit(1);
+            }
+            sml[instr_count++] = make_instr(21, temp_loc); /* 21 = almacenar */
+            stack_pos[sp++] = temp_loc;
         } else {
-            out[outi++] = strdup(tok);
+            /* token desconocido: ignorar */
         }
         tok = strtok(NULL, " ");
     }
-    while (top >= 0) {
-        out[outi++] = strdup(stack[top--]);
+
+    if (sp != 1) {
+        fprintf(stderr, "Error: evaluación posfija produjo pila con %d elementos\n", sp);
+        free(copy);
+        exit(1);
     }
-    out[outi] = NULL;
+    i = stack_pos[0];
     free(copy);
-    char **ret = malloc((outi + 1) * sizeof(char *));
-    if (!ret) { perror("malloc"); exit(EXIT_FAILURE); }
-    {
-        int i;
-        for (i = 0; i <= outi; ++i) ret[i] = out[i];
-    }
-    return ret;
+    return i;
 }
 
-/* Liberar arreglo posfijo */
-void free_postfix(char **pf) {
-    {
-        int i;
-        for (i = 0; pf[i]; ++i) free(pf[i]);
-    }
-    free(pf);
-}
+/* Procesa una línea del programa Simple en la primera pasada */
+void process_line_first(char *line) {
+    char buffer[MAXLINE];
+    char *save;
+    char *num;
+    char *cmd;
+    char *rest;
+    char *token;
+    int idx, idx2;
+    int destIdx;
+    int destLine;
+    int respos;
+    char expr[MAXLINE];
 
-/* Evaluar posfijo pero generando instrucciones SML (gancho).
-   Devuelve la dirección de memoria que contiene el resultado. */
-int eval_postfix_generate_sml(char **postfix) {
-    int addr_stack[256];
-    int sp = -1;
-    {
-        int i;
-        for (i = 0; postfix[i]; ++i) {
-            char *t = postfix[i];
-            if (is_op(t)) {
-                if (sp < 1) {
-                    fprintf(stderr, "Error: expresión mal formada (operandos insuficientes)\n");
-                    exit(EXIT_FAILURE);
-                }
-                int right = addr_stack[sp--];
-                int left = addr_stack[sp--];
+    strncpy(buffer, line, MAXLINE - 1);
+    buffer[MAXLINE - 1] = '\0';
+    save = buffer;
+    while (*save && (*save == ' ' || *save == '\t')) save++;
+    num = strtok(save, " \t\r\n");
+    if (!num) return;
+    lookup_or_add(num, 'L', 1);
 
-                /* Generar secuencia: LOAD left; ADD/SUB right; STORE temp; push temp */
-                emit(OP_LOAD, left);
-                if (strcmp(t, "+") == 0) emit(OP_ADD, right);
-                else if (strcmp(t, "-") == 0) emit(OP_SUB, right);
-                else if (strcmp(t, "*") == 0 || strcmp(t, "/") == 0) {
-                    /* Multiplicación/división no implementadas en SML básico;
-                       aquí se podría simular con sumas repetidas o llamadas a rutina.
-                       Por ahora, reportamos error si se usan. */
-                    fprintf(stderr, "Error: operador %s no implementado en generación SML\n", t);
-                    exit(EXIT_FAILURE);
-                } else {
-                    fprintf(stderr, "Error: operador desconocido %s\n", t);
-                    exit(EXIT_FAILURE);
-                }
-                int temp = allocate_data_slot();
-                emit(OP_STORE, temp);
-                addr_stack[++sp] = temp;
-            } else {
-                /* Operando: constante entera o variable (nombre de una letra) */
-                char *endptr;
-                long val = strtol(t, &endptr, 10);
-                if (*endptr == '\0') {
-                    /* constante */
-                    int sym = (int)val;
-                    tableEntry *e = find_symbol(sym, 'C');
-                    if (!e) {
-                        e = insert_symbol(sym, 'C');
-                        int loc = allocate_data_slot();
-                        e->location = loc;
-                        memory[loc] = (int)val;
-                    }
-                    addr_stack[++sp] = e->location;
-                } else {
-                    /* variable: asumimos una sola letra */
-                    if (strlen(t) != 1 || !isalpha((unsigned char)t[0])) {
-                        fprintf(stderr, "Error: nombre de variable inválido: %s\n", t);
-                        exit(EXIT_FAILURE);
-                    }
-                    int sym = (int)t[0];
-                    tableEntry *e = find_symbol(sym, 'V');
-                    if (!e) {
-                        e = insert_symbol(sym, 'V');
-                        int loc = allocate_data_slot();
-                        e->location = loc;
-                        e->type = 'V';
-                        memory[loc] = 0;
-                    }
-                    addr_stack[++sp] = e->location;
-                }
-            }
-        }
-    }
-    if (sp != 0) {
-        fprintf(stderr, "Error: evaluación posfija terminó con pila de tamaño %d (se esperaba 1)\n", sp+1);
-        exit(EXIT_FAILURE);
-    }
-    return addr_stack[sp];
-}
-
-/* Procesar una línea en la primera pasada */
-void process_line_first_pass(char *line) {
-    char *copy = strdup(line);
-    if (!copy) { perror("strdup"); exit(EXIT_FAILURE); }
-    char *token = strtok(copy, " ");
-    if (!token) { free(copy); return; }
-    int lineno = atoi(token);
-
-    /* Insertar número de línea en tabla como tipo 'L' */
-    tableEntry *lineEntry = find_symbol(lineno, 'L');
-    if (!lineEntry) {
-        lineEntry = insert_symbol(lineno, 'L');
-        lineEntry->location = instr_ptr;
-    } else if (lineEntry->location == -1) {
-        lineEntry->location = instr_ptr;
-    }
-
-    char *cmd = strtok(NULL, " ");
-    if (!cmd) { free(copy); return; }
+    cmd = strtok(NULL, " \t\r\n");
+    if (!cmd) return;
 
     if (strcmp(cmd, "rem") == 0) {
-        free(copy);
         return;
     } else if (strcmp(cmd, "input") == 0) {
-        char *var = strtok(NULL, " ");
-        if (!var) { fprintf(stderr, "Error: input sin variable\n"); exit(EXIT_FAILURE); }
-        int sym = (int)var[0];
-        tableEntry *v = find_symbol(sym, 'V');
-        if (!v) {
-            v = insert_symbol(sym, 'V');
-            int loc = allocate_data_slot();
-            v->location = loc;
-            v->type = 'V';
-            memory[loc] = 0;
-        }
-        emit(OP_READ, v->location);
+        token = strtok(NULL, " \t\r\n");
+        if (!token) { fprintf(stderr, "Error: input sin variable\n"); return; }
+        idx = lookup_or_add(token, 'v', 1);
+        if (instr_count >= MEMSIZE) { fprintf(stderr, "Error: instrucciones agotadas\n"); return; }
+        sml[instr_count++] = make_instr(10, symtab[idx].location); /* 10 = leer */
     } else if (strcmp(cmd, "print") == 0) {
-        char *var = strtok(NULL, " ");
-        if (!var) { fprintf(stderr, "Error: print sin operando\n"); exit(EXIT_FAILURE); }
-        if (isdigit((unsigned char)var[0]) || (var[0]=='-' && isdigit((unsigned char)var[1]))) {
-            int val = atoi(var);
-            tableEntry *c = find_symbol(val, 'C');
-            if (!c) {
-                c = insert_symbol(val, 'C');
-                int loc = allocate_data_slot();
-                c->location = loc;
-                c->type = 'C';
-                memory[loc] = val;
-            }
-            emit(OP_WRITE, c->location);
-        } else {
-            int sym = (int)var[0];
-            tableEntry *v = find_symbol(sym, 'V');
-            if (!v) {
-                v = insert_symbol(sym, 'V');
-                int loc = allocate_data_slot();
-                v->location = loc;
-                v->type = 'V';
-                memory[loc] = 0;
-            }
-            emit(OP_WRITE, v->location);
-        }
+        token = strtok(NULL, " \t\r\n");
+        if (!token) { fprintf(stderr, "Error: print sin operando\n"); return; }
+        idx = lookup_or_add(token, isalpha(token[0]) ? 'v' : 'c', 1);
+        if (instr_count >= MEMSIZE) { fprintf(stderr, "Error: instrucciones agotadas\n"); return; }
+        sml[instr_count++] = make_instr(11, symtab[idx].location); /* 11 = escribir */
     } else if (strcmp(cmd, "goto") == 0) {
-        char *target = strtok(NULL, " ");
-        int targetLine = atoi(target);
-        tableEntry *t = find_symbol(targetLine, 'L');
-        if (t && t->location != -1) {
-            emit(OP_BRANCH, t->location);
+        token = strtok(NULL, " \t\r\n");
+        if (!token) { fprintf(stderr, "Error: goto sin destino\n"); return; }
+        destIdx = lookup_or_add(token, 'L', 0);
+        if (destIdx == -1) {
+            if (instr_count >= MEMSIZE) { fprintf(stderr, "Error: instrucciones agotadas\n"); return; }
+            destLine = atoi(token);
+            flags[instr_count] = destLine;
+            sml[instr_count++] = make_instr(40, 0); /* 40 = bifurcar incondicional */
         } else {
-            emit_branch_with_line(OP_BRANCH, targetLine);
+            if (instr_count >= MEMSIZE) { fprintf(stderr, "Error: instrucciones agotadas\n"); return; }
+            sml[instr_count++] = make_instr(40, symtab[destIdx].location);
         }
     } else if (strcmp(cmd, "if") == 0) {
-        /* if <left> <relop> <right> goto <line> */
-        char *left = strtok(NULL, " ");
-        char *relop = strtok(NULL, " ");
-        char *right = strtok(NULL, " ");
-        char *goto_kw = strtok(NULL, " ");
-        char *target = strtok(NULL, " ");
-        if (!left || !relop || !right || !goto_kw || !target) {
-            fprintf(stderr, "Error: if mal formado\n"); exit(EXIT_FAILURE);
+        /* formato: if a OP b goto N
+           tokens separados por espacios: if a OP b goto N */
+        char *a = strtok(NULL, " \t\r\n");
+        char *op = strtok(NULL, " \t\r\n"); /* operator like ==, !=, <, >, <=, >= */
+        char *b = strtok(NULL, " \t\r\n");
+        char *goto_kw = strtok(NULL, " \t\r\n"); /* goto */
+        char *dest = strtok(NULL, " \t\r\n");
+        if (!a || !op || !b || !goto_kw || !dest) {
+            fprintf(stderr, "Error: if mal formado\n");
+            return;
         }
-        int left_addr, right_addr;
-        if (isdigit((unsigned char)left[0]) || (left[0]=='-' && isdigit((unsigned char)left[1]))) {
-            int val = atoi(left);
-            tableEntry *c = find_symbol(val, 'C');
-            if (!c) {
-                c = insert_symbol(val, 'C');
-                int loc = allocate_data_slot();
-                c->location = loc;
-                c->type = 'C';
-                memory[loc] = val;
-            }
-            left_addr = c->location;
-        } else {
-            int sym = (int)left[0];
-            tableEntry *v = find_symbol(sym, 'V');
-            if (!v) {
-                v = insert_symbol(sym, 'V');
-                int loc = allocate_data_slot();
-                v->location = loc;
-                v->type = 'V';
-                memory[loc] = 0;
-            }
-            left_addr = v->location;
-        }
-        if (isdigit((unsigned char)right[0]) || (right[0]=='-' && isdigit((unsigned char)right[1]))) {
-            int val = atoi(right);
-            tableEntry *c = find_symbol(val, 'C');
-            if (!c) {
-                c = insert_symbol(val, 'C');
-                int loc = allocate_data_slot();
-                c->location = loc;
-                c->type = 'C';
-                memory[loc] = val;
-            }
-            right_addr = c->location;
-        } else {
-            int sym = (int)right[0];
-            tableEntry *v = find_symbol(sym, 'V');
-            if (!v) {
-                v = insert_symbol(sym, 'V');
-                int loc = allocate_data_slot();
-                v->location = loc;
-                v->type = 'V';
-                memory[loc] = 0;
-            }
-            right_addr = v->location;
-        }
-        /* Generar: LOAD left; SUB right; BRANCHZERO target (para ==) */
-        emit(OP_LOAD, left_addr);
-        emit(OP_SUB, right_addr);
-        {
-            int targetLine = atoi(target);
-            tableEntry *t = find_symbol(targetLine, 'L');
-            if (t && t->location != -1) {
-                emit(OP_BRANCHZERO, t->location);
+        idx = lookup_or_add(a, isalpha(a[0]) ? 'v' : 'c', 1);
+        idx2 = lookup_or_add(b, isalpha(b[0]) ? 'v' : 'c', 1);
+
+        /* Implementaciones por operador:
+           - == : cargar a; restar b; bifurcar si cero dest
+           - != : cargar a; restar b; bifurcar si cero skip; goto dest; skip:
+           - <  : cargar a; restar b; bifurcar si negativo dest
+           - >  : cargar b; restar a; bifurcar si negativo dest
+           - <= : cargar a; restar b; bifurcar si negativo dest; bifurcar si cero dest
+           - >= : cargar b; restar a; bifurcar si negativo dest; bifurcar si cero dest
+        */
+
+        if (instr_count + 5 >= MEMSIZE) { fprintf(stderr, "Error: instrucciones agotadas\n"); return; }
+
+        if (strcmp(op, "==") == 0) {
+            sml[instr_count++] = make_instr(20, symtab[idx].location); /* cargar a */
+            sml[instr_count++] = make_instr(31, symtab[idx2].location); /* restar b */
+            destIdx = lookup_or_add(dest, 'L', 0);
+            if (destIdx == -1) {
+                destLine = atoi(dest);
+                flags[instr_count] = destLine;
+                sml[instr_count++] = make_instr(42, 0); /* 42 = bifurcar si cero */
             } else {
-                emit_branch_with_line(OP_BRANCHZERO, targetLine);
+                sml[instr_count++] = make_instr(42, symtab[destIdx].location);
             }
+        } else if (strcmp(op, "!=") == 0) {
+            /* cargar a; restar b; bifurcar si cero -> skip; goto dest; skip: (use known next index) */
+            sml[instr_count++] = make_instr(20, symtab[idx].location);
+            sml[instr_count++] = make_instr(31, symtab[idx2].location);
+            /* bifurcar si cero a skip (skip = instr_count + 2) */
+            {
+                int skip_pos = instr_count + 2; /* after the unconditional goto we'll place skip */
+                sml[instr_count] = make_instr(42, skip_pos); /* temporary operand; will be adjusted in second pass only if skip refers to a line number, but here skip_pos is an index so it's fine */
+                /* We don't use flags[] for this internal skip because it's a direct numeric address */
+                instr_count++;
+            }
+            /* unconditional goto dest */
+            destIdx = lookup_or_add(dest, 'L', 0);
+            if (destIdx == -1) {
+                destLine = atoi(dest);
+                flags[instr_count] = destLine;
+                sml[instr_count++] = make_instr(40, 0);
+            } else {
+                sml[instr_count++] = make_instr(40, symtab[destIdx].location);
+            }
+            /* skip: no-op (could be a dummy instruction). We'll just continue; no explicit instruction needed */
+        } else if (strcmp(op, "<") == 0) {
+            sml[instr_count++] = make_instr(20, symtab[idx].location);
+            sml[instr_count++] = make_instr(31, symtab[idx2].location);
+            destIdx = lookup_or_add(dest, 'L', 0);
+            if (destIdx == -1) {
+                destLine = atoi(dest);
+                flags[instr_count] = destLine;
+                sml[instr_count++] = make_instr(41, 0); /* 41 = bifurcar si negativo */
+            } else {
+                sml[instr_count++] = make_instr(41, symtab[destIdx].location);
+            }
+        } else if (strcmp(op, ">") == 0) {
+            /* a > b  <=>  b - a < 0 */
+            sml[instr_count++] = make_instr(20, symtab[idx2].location); /* cargar b */
+            sml[instr_count++] = make_instr(31, symtab[idx].location);  /* restar a */
+            destIdx = lookup_or_add(dest, 'L', 0);
+            if (destIdx == -1) {
+                destLine = atoi(dest);
+                flags[instr_count] = destLine;
+                sml[instr_count++] = make_instr(41, 0);
+            } else {
+                sml[instr_count++] = make_instr(41, symtab[destIdx].location);
+            }
+        } else if (strcmp(op, "<=") == 0) {
+            /* if a <= b then (a < b) or (a == b) */
+            sml[instr_count++] = make_instr(20, symtab[idx].location);
+            sml[instr_count++] = make_instr(31, symtab[idx2].location);
+            /* bifurcar si negativo dest */
+            destIdx = lookup_or_add(dest, 'L', 0);
+            if (destIdx == -1) {
+                destLine = atoi(dest);
+                flags[instr_count] = destLine;
+                sml[instr_count++] = make_instr(41, 0);
+            } else {
+                sml[instr_count++] = make_instr(41, symtab[destIdx].location);
+            }
+            /* bifurcar si cero dest */
+            destIdx = lookup_or_add(dest, 'L', 0);
+            if (destIdx == -1) {
+                destLine = atoi(dest);
+                flags[instr_count] = destLine;
+                sml[instr_count++] = make_instr(42, 0);
+            } else {
+                sml[instr_count++] = make_instr(42, symtab[destIdx].location);
+            }
+        } else if (strcmp(op, ">=") == 0) {
+            /* if a >= b then (a > b) or (a == b) */
+            sml[instr_count++] = make_instr(20, symtab[idx2].location); /* cargar b */
+            sml[instr_count++] = make_instr(31, symtab[idx].location);  /* restar a */
+            /* bifurcar si negativo dest (b - a < 0) => a > b */
+            destIdx = lookup_or_add(dest, 'L', 0);
+            if (destIdx == -1) {
+                destLine = atoi(dest);
+                flags[instr_count] = destLine;
+                sml[instr_count++] = make_instr(41, 0);
+            } else {
+                sml[instr_count++] = make_instr(41, symtab[destIdx].location);
+            }
+            /* bifurcar si cero dest (a == b) */
+            destIdx = lookup_or_add(dest, 'L', 0);
+            if (destIdx == -1) {
+                destLine = atoi(dest);
+                flags[instr_count] = destLine;
+                sml[instr_count++] = make_instr(42, 0);
+            } else {
+                sml[instr_count++] = make_instr(42, symtab[destIdx].location);
+            }
+        } else {
+            fprintf(stderr, "Operador relacional no soportado: %s\n", op);
+            return;
         }
     } else if (strcmp(cmd, "let") == 0) {
-        /* let <var> = <expression...> */
-        char *var = strtok(NULL, " ");
-        char *eq = strtok(NULL, " ");
-        char *rest = strtok(NULL, "\n");
-        if (!var || !eq || !rest) { fprintf(stderr, "Error: let mal formado\n"); exit(EXIT_FAILURE); }
-        char *expr = trim(rest);
-        int sym = (int)var[0];
-        tableEntry *lhs = find_symbol(sym, 'V');
-        if (!lhs) {
-            lhs = insert_symbol(sym, 'V');
-            int loc = allocate_data_slot();
-            lhs->location = loc;
-            lhs->type = 'V';
-            memory[loc] = 0;
+        char *var = strtok(NULL, " \t\r\n");
+        char *eq = strtok(NULL, " \t\r\n"); /* "=" */
+        if (!var || !eq) { fprintf(stderr, "Error: let mal formado\n"); return; }
+        rest = strtok(NULL, "\n");
+        if (!rest) rest = "";
+        while (*rest && (*rest == ' ' || *rest == '\t')) rest++;
+        strncpy(expr, rest, MAXLINE - 1);
+        expr[MAXLINE - 1] = '\0';
+        idx = lookup_or_add(var, 'v', 1);
+        {
+            char *post = infix_to_postfix(expr);
+            respos = eval_postfix_generate(post);
+            free(post);
         }
-        char **postfix = infix_to_postfix(expr);
-        int result_addr = eval_postfix_generate_sml(postfix);
-        emit(OP_LOAD, result_addr);
-        emit(OP_STORE, lhs->location);
-        free_postfix(postfix);
+        if (instr_count + 2 >= MEMSIZE) { fprintf(stderr, "Error: instrucciones agotadas\n"); return; }
+        sml[instr_count++] = make_instr(20, respos); /* cargar temp */
+        sml[instr_count++] = make_instr(21, symtab[idx].location); /* almacenar en var */
     } else if (strcmp(cmd, "end") == 0) {
-        emit(OP_HALT, 0);
+        if (instr_count >= MEMSIZE) { fprintf(stderr, "Error: instrucciones agotadas\n"); return; }
+        sml[instr_count++] = make_instr(43, 0); /* 43 = alto */
     } else {
-        fprintf(stderr, "Error: comando desconocido: %s\n", cmd);
-        exit(EXIT_FAILURE);
+        fprintf(stderr, "Advertencia: comando desconocido '%s'\n", cmd);
     }
-
-    free(copy);
 }
 
-/* Primera pasada: leer archivo de entrada y procesar línea por línea */
-void first_pass(const char *infile) {
-    FILE *f = fopen(infile, "r");
-    if (!f) { perror("Error al abrir archivo de entrada"); exit(EXIT_FAILURE); }
-    char line[LINE_MAX];
-    while (fgets(line, sizeof(line), f)) {
-        char *t = trim(line);
-        if (strlen(t) == 0) continue;
-        process_line_first_pass(t);
+/* Segunda pasada: resolver flags y escribir archivo SML */
+void second_pass_and_write(const char *outname) {
+    int i, s;
+    FILE *f;
+    char buf[32];
+
+    for (i = 0; i < instr_count; i++) {
+        if (flags[i] != -1) {
+            sprintf(buf, "%d", flags[i]);
+            for (s = 0; s < symcount; s++) {
+                if (symtab[s].type == 'L' && strcmp(symtab[s].symbol, buf) == 0) {
+                    int loc = symtab[s].location;
+                    sml[i] = (sml[i] / 100) * 100 + loc;
+                    break;
+                }
+            }
+            /* si no se encontró, dejar operand 00 (o podríamos error) */
+        }
+    }
+
+    f = fopen(outname, "w");
+    if (!f) {
+        fprintf(stderr, "Error: no se puede abrir %s para escritura\n", outname);
+        return;
+    }
+    for (i = 0; i < instr_count; i++) {
+        fprintf(f, "%+05d\n", sml[i]);
     }
     fclose(f);
 }
 
-/* Segunda pasada: resolver flags y escribir archivo SML */
-void second_pass_and_write(const char *outfile) {
-    {
-        int i;
-        for (i = 0; i < MEM_SIZE; ++i) {
-            if (flags[i] != -1) {
-                int targetLine = flags[i];
-                tableEntry *t = find_symbol(targetLine, 'L');
-                if (!t || t->location == -1) {
-                    fprintf(stderr, "Error: referencia a línea indefinida: %d\n", targetLine);
-                    exit(EXIT_FAILURE);
-                }
-                int opcode = memory[i] / 100;
-                memory[i] = opcode * 100 + t->location;
-                flags[i] = -1;
-            }
-        }
-    }
-    FILE *out = fopen(outfile, "w");
-    if (!out) { perror("Error al abrir archivo de salida"); exit(EXIT_FAILURE); }
-    {
-        int i;
-        for (i = 0; i < instr_ptr; ++i) {
-            fprintf(out, "%+05d\n", memory[i]);
-        }
-    }
-    fclose(out);
-}
-
-/* Inicializar estado */
-void init_state() {
-    {
-        int i;
-        for (i = 0; i < MEM_SIZE; ++i) {
-            memory[i] = 0;
-            flags[i] = -1;
-        }
-    }
-    instr_ptr = 0;
-    data_ptr = MEM_SIZE - 1;
-}
-
-/* Imprimir tabla de símbolos (para verificación) */
-void print_symbol_table() {
-    printf("Tabla de símbolos:\n");
-    tableEntry *p = symbolTable;
-    while (p) {
-        if (p->type == 'L') printf("Línea %d -> loc %02d\n", p->symbol, p->location);
-        else if (p->type == 'V') printf("Var '%c' -> loc %02d\n", (char)p->symbol, p->location);
-        else if (p->type == 'C') printf("Const %d -> loc %02d\n", p->symbol, p->location);
-        p = p->next;
-    }
-}
-
 /* Programa principal */
-int main(int argc, char **argv) {
-    if (argc < 3) {
-        fprintf(stderr, "Uso: %s archivo_entrada.simple archivo_salida.sml\n", argv[0]);
+int main(int argc, char *argv[])
+{
+    FILE *in;
+    char line[MAXLINE];
+    char fuente[256];
+    char salida[256];
+    int i;
+
+    if (argc >= 3) {
+        strcpy(fuente, argv[1]);
+        strcpy(salida, argv[2]);
+    } else {
+        printf("Archivo fuente: ");
+        scanf("%255s", fuente);
+
+        printf("Archivo salida: ");
+        scanf("%255s", salida);
+    }
+
+    for (i = 0; i < MEMSIZE; i++)
+        flags[i] = -1;
+
+    printf("Intentando abrir: %s\n", fuente);
+    in = fopen(fuente, "r");
+    if (!in) {
+        printf("No se pudo abrir %s\n", fuente);
         return 1;
     }
-    const char *infile = argv[1];
-    const char *outfile = argv[2];
 
-    init_state();
-    first_pass(infile);
-    second_pass_and_write(outfile);
+    while (fgets(line, sizeof(line), in) != NULL)
+        process_line_first(line);
 
-    print_symbol_table();
+    fclose(in);
 
-    printf("Compilación finalizada. Archivo SML escrito en %s\n", outfile);
+    second_pass_and_write(salida);
+
+    printf("Compilacion completada.\n");
+
     return 0;
 }
 
