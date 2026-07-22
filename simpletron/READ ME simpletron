@@ -1,0 +1,148 @@
+# 📁 Simpletron
+
+## Descripción general
+
+Esta carpeta contiene el desarrollo del **simulador de computadora Simpletron**, encargado de ejecutar instrucciones escritas en **SML (Simpletron Machine Language)**.
+
+El proyecto comenzó como un simulador básico capaz de cargar instrucciones en memoria y ejecutar operaciones simples. Con el tiempo se fueron agregando mejoras para ampliar sus capacidades, facilitar las pruebas y acercarlo al funcionamiento de una computadora real.
+
+---
+
+# Funcionamiento del simulador
+
+El simulador ejecuta instrucciones mediante un ciclo de procesamiento:
+
+1. Leer instrucción desde memoria.
+2. Decodificar opcode y operando.
+3. Ejecutar la operación.
+4. Actualizar el contador de instrucciones.
+
+El sistema utiliza los siguientes registros:
+
+- **accumulator:** almacena resultados temporales.
+- **instructionCounter:** indica la siguiente instrucción a ejecutar.
+- **instructionRegister:** contiene la instrucción actual.
+- **operationCode:** identifica la operación.
+- **operand:** almacena el valor asociado a la instrucción.
+
+---
+
+# Manejo de errores
+
+El simulador valida diferentes situaciones durante la ejecución:
+
+- División entre cero.
+- Opcode inválido.
+- Desbordamiento del acumulador.
+- Direcciones de memoria inválidas.
+- Valores fuera del rango permitido.
+
+---
+
+# Mejoras implementadas
+
+## 1. Carga de programas desde archivo
+
+Se agregó la posibilidad de cargar programas automáticamente desde:
+programa.simp
+
+
+Si el archivo no existe, el simulador mantiene la entrada manual por teclado.
+
+Beneficios:
+
+- Facilita pruebas.
+- Permite reutilizar programas.
+- Automatiza la ejecución.
+
+---
+
+## 2. Memoria extendida
+
+La memoria fue ampliada a:
+1000 posiciones (0-999)
+
+
+Se actualizaron las validaciones y el manejo de direcciones para permitir programas más grandes.
+
+---
+
+## 3. Nuevas instrucciones SML
+
+Se agregaron nuevas operaciones al conjunto de instrucciones:
+
+### Residuo (módulo)
+
+Permite calcular:
+A mod B
+
+
+Incluyendo manejo de división entre cero.
+
+---
+
+### Exponenciación
+
+Permite realizar operaciones de potencia:
+A^B
+
+
+Incluye validaciones de límites y posibles desbordamientos.
+
+---
+
+### Salto de línea
+
+Nueva instrucción de salida para generar formatos más legibles al imprimir resultados.
+
+---
+
+## 4. Manejo de cadenas
+
+Se implementó soporte para entrada y salida de texto utilizando códigos ASCII.
+
+Permite:
+
+- Guardar cadenas en memoria.
+- Almacenar longitud y caracteres.
+- Convertir ASCII a texto durante la salida.
+
+---
+
+## 5. Soporte de punto flotante
+
+Se agregó soporte básico para trabajar con números decimales.
+
+Incluye:
+
+- Lectura de valores flotantes.
+- Almacenamiento.
+- Operaciones básicas.
+- Validación de resultados.
+
+---
+
+# Pruebas realizadas
+
+Cada extensión cuenta con programas de prueba para verificar:
+
+- Correcta ejecución de instrucciones.
+- Manejo de errores.
+- Límites de memoria.
+- Operaciones matemáticas.
+- Entrada y salida de datos.
+
+---
+
+# Resultado final
+
+El simulador evolucionó de una versión básica a una implementación más completa con:
+
+- Carga automática de programas.
+- Mayor capacidad de memoria.
+- Nuevas instrucciones SML.
+- Operaciones matemáticas avanzadas.
+- Manejo de cadenas.
+- Soporte de punto flotante.
+
+Estas mejoras permiten utilizar Simpletron como una plataforma más completa para desarrollar y ejecutar programas en SML.
