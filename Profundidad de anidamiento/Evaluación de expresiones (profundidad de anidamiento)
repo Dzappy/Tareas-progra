@@ -1,0 +1,131 @@
+# 📁 Evaluación de expresiones (profundidad de anidamiento)
+
+## Descripción general
+
+Esta carpeta contiene el desarrollo del módulo encargado del **análisis, transformación y evaluación de expresiones matemáticas** dentro del proyecto.
+
+El proyecto comenzó con una implementación básica para el procesamiento de expresiones y, conforme avanzó su desarrollo, se fueron incorporando diferentes mejoras con el objetivo de ampliar sus capacidades y convertirlo en una base funcional para su futura integración dentro de un compilador.
+
+Las principales mejoras agregadas durante la evolución del proyecto fueron:
+
+- Validación de profundidad de anidamiento.
+- Conversión de expresiones infijas a expresiones postfijas.
+- Evaluación de expresiones postfijas.
+
+Estas funcionalidades permiten analizar una expresión, verificar que su estructura sea correcta, transformarla a un formato más sencillo de procesar y finalmente obtener su resultado respetando las reglas matemáticas correspondientes.
+
+---
+
+# Funcionalidades principales
+
+## 1. Validación de profundidad de anidamiento
+
+El sistema permite analizar la profundidad de anidamiento presente dentro de una expresión.
+
+Esta funcionalidad se encarga de identificar los diferentes niveles de agrupación mediante símbolos de apertura y cierre, permitiendo conocer qué tan compleja es la estructura de una expresión.
+
+
+varias expresiones contienen varios niveles de anidamiento que deben ser correctamente identificados antes de continuar con su procesamiento.
+
+Esta validación es importante para detectar estructuras incorrectas o expresiones que superen los límites establecidos por el sistema.
+
+---
+
+## 2. Verificación de balance de símbolos de agrupación
+
+El proyecto incluye la validación del correcto uso de símbolos de agrupación dentro de las expresiones.
+
+La función comprueba que cada símbolo de apertura tenga un símbolo de cierre correspondiente y que mantengan un orden correcto.
+
+
+Esta validación evita que expresiones mal estructuradas continúen hacia los procesos de conversión o evaluación.
+
+---
+
+## 3. Conversión de expresiones infijas a expresiones postfijas
+
+Una de las mejoras agregadas al proyecto fue la implementación de la conversión de expresiones escritas en formato **infijo** hacia formato **postfijo**.
+
+El formato infijo es la forma tradicional en la que los humanos escriben operaciones, colocando los operadores entre los operandos.
+
+
+El formato postfijo reorganiza la expresión colocando los operadores después de sus operandos.
+
+
+Esta transformación facilita el procesamiento computacional de las expresiones, ya que elimina la necesidad de resolver prioridades durante la evaluación.
+
+Durante la conversión se consideran:
+
+- Precedencia de operadores.
+- Asociatividad de operadores.
+- Uso de paréntesis.
+- Orden correcto de ejecución de operaciones.
+
+---
+
+## 4. Evaluación de expresiones postfijas
+
+Después de convertir una expresión infija a postfija, el sistema permite evaluar la expresión obteniendo un resultado final.
+
+La evaluación se realiza siguiendo el orden establecido en la expresión postfija, utilizando la estructura generada durante la conversión.
+
+---
+
+# Evolución del proyecto
+
+El desarrollo de esta carpeta representa una mejora progresiva del código inicial.
+
+El proyecto fue creciendo mediante diferentes etapas de implementación:
+
+---
+
+## Etapa inicial
+
+Se desarrolló una versión básica encargada del procesamiento de expresiones.
+
+Esta primera versión estableció la base sobre la cual se fueron agregando nuevas funcionalidades.
+
+---
+
+## Primera mejora: Validación de profundidad de anidamiento
+
+Se incorporó la capacidad de analizar los niveles de agrupación dentro de una expresión.
+
+Esta mejora permitió verificar la estructura interna de las expresiones y detectar problemas relacionados con símbolos de agrupación.
+
+---
+
+## Segunda mejora: Conversión de expresiones a postfijo
+
+Se agregó el algoritmo encargado de transformar expresiones infijas a expresiones postfijas.
+
+Esta implementación permitió manejar correctamente:
+
+- Precedencia de operadores.
+- Asociatividad.
+- Paréntesis.
+- Orden de operaciones.
+
+---
+
+## Tercera mejora: Evaluación de expresiones postfijas
+
+Finalmente, se añadió la capacidad de evaluar expresiones en formato postfijo.
+
+Con esta mejora el sistema pasó de únicamente analizar y transformar expresiones a poder resolverlas y obtener resultados.
+
+---
+
+# Integración con el compilador
+
+Este módulo representa una base importante para la construcción del compilador.
+
+Las funcionalidades desarrolladas permiten realizar procesos fundamentales dentro del análisis de expresiones, como:
+
+- Validación sintáctica básica.
+- Organización de operaciones.
+- Transformación de estructuras.
+- Resolución de expresiones matemáticas.
+
+La implementación de estas herramientas facilita futuras etapas del compilador, permitiendo interpretar correctamente expresiones escritas dentro del lenguaje desarrollado.
+
