@@ -1,0 +1,325 @@
+# 📁 Compilador (Proyecto principal)
+
+## Descripción general
+
+Esta carpeta contiene el proyecto principal del sistema: un **compilador desarrollado en lenguaje C para el lenguaje Simple**, encargado de transformar programas escritos en código fuente Simple a instrucciones compatibles con **SML (Simpletron Machine Language)**.
+
+El compilador realiza un proceso de traducción mediante un modelo de **dos pasadas**, permitiendo analizar el programa fuente, construir la información necesaria, resolver referencias pendientes y finalmente generar un archivo SML ejecutable dentro del simulador de Simpletron.
+
+Este proyecto integra las funcionalidades desarrolladas previamente, incluyendo la conversión de expresiones infijas a postfijas para el procesamiento de operaciones dentro de instrucciones `let`.
+
+---
+
+# Objetivo del proyecto
+
+El objetivo principal del compilador es tomar un programa escrito en el lenguaje Simple y convertirlo automáticamente en código SML funcional.
+
+El proceso permite:
+
+- Leer programas fuente escritos en Simple.
+- Analizar la estructura del programa.
+- Crear una tabla de símbolos.
+- Generar instrucciones SML equivalentes.
+- Resolver referencias entre instrucciones.
+- Producir un archivo final listo para ejecutarse en el simulador de Simpletron.
+
+---
+
+# Funcionamiento del compilador
+
+El compilador utiliza un proceso dividido en dos pasadas para realizar correctamente la traducción del código fuente.
+
+---
+
+# Primera pasada
+
+Durante la primera pasada se realiza un análisis inicial del programa fuente.
+
+Las principales tareas realizadas son:
+
+## Construcción de tabla de símbolos
+
+El compilador identifica y registra los elementos utilizados dentro del programa Simple.
+
+La tabla de símbolos almacena información necesaria para la generación del código SML, incluyendo:
+
+- Variables.
+- Constantes.
+- Referencias utilizadas dentro del programa.
+
+---
+
+## Registro de información del programa
+
+Durante esta etapa se almacenan datos importantes como:
+
+- Números de línea del programa Simple.
+- Variables declaradas o utilizadas.
+- Valores constantes.
+- Posiciones necesarias para la generación del código final.
+
+---
+
+## Generación de instrucciones SML preliminares
+
+A partir del análisis del código fuente, el compilador comienza a generar instrucciones SML.
+
+Estas instrucciones todavía pueden contener referencias incompletas, ya que algunas posiciones pueden depender de elementos que aparecen posteriormente en el programa.
+
+---
+
+## Marcado de referencias no resueltas
+
+Cuando el compilador encuentra una referencia hacia una línea o variable que todavía no puede determinar, la marca como pendiente para ser solucionada durante la segunda pasada.
+
+Esto permite manejar correctamente referencias hacia adelante dentro del programa.
+
+---
+
+# Segunda pasada
+
+La segunda pasada se encarga de completar y corregir la información generada durante la primera etapa.
+
+Sus principales funciones son:
+
+---
+
+## Resolución de referencias hacia adelante
+
+El compilador busca las referencias que quedaron pendientes y las reemplaza con las posiciones correctas dentro del código SML.
+
+Esto permite utilizar instrucciones que hacen referencia a elementos definidos posteriormente en el programa Simple.
+
+---
+
+## Completar instrucciones inconclusas
+
+Las instrucciones generadas durante la primera pasada que no tenían toda la información necesaria son completadas.
+
+Después de esta etapa, todas las instrucciones deben contener los datos necesarios para su ejecución.
+
+---
+
+## Generación del archivo final SML
+
+Una vez resueltas todas las referencias, el compilador genera el archivo final en formato SML.
+
+Este archivo contiene las instrucciones necesarias para ser ejecutadas directamente en el simulador de Simpletron.
+
+---
+
+# Instrucciones Simple soportadas
+
+El compilador permite procesar las instrucciones principales del lenguaje Simple:
+
+---
+
+## Input
+
+Permite recibir valores introducidos por el usuario y almacenarlos en variables.
+
+Ejemplo:
+input x
+
+---
+
+## Print
+
+Permite mostrar valores almacenados durante la ejecución del programa.
+
+Ejemplo:
+print x
+
+
+---
+
+## Goto
+
+Permite realizar saltos incondicionales hacia una línea específica del programa.
+
+Ejemplo:
+
+goto 100
+
+
+---
+
+## If/Goto
+
+Permite realizar saltos condicionales dependiendo del resultado de una comparación.
+
+Ejemplo:
+
+if x > 10 goto 200
+
+---
+
+## Let
+
+Permite realizar asignaciones y operaciones matemáticas.
+
+Ejemplo:
+let x = 5 + 3
+
+
+Las expresiones utilizadas dentro de esta instrucción son procesadas mediante conversión de notación infija a postfija para facilitar su evaluación y traducción a instrucciones SML.
+
+---
+
+## End
+
+Marca la finalización del programa Simple.
+
+Ejemplo:
+end
+
+
+---
+
+# Procesamiento de expresiones matemáticas
+
+Para las instrucciones `let`, el compilador utiliza el módulo de evaluación de expresiones desarrollado previamente.
+
+El proceso realizado es:
+
+1. Lectura de la expresión en formato infijo.
+2. Conversión a formato postfijo.
+3. Evaluación y generación de instrucciones SML correspondientes.
+
+Esto permite respetar correctamente:
+
+- Precedencia de operadores.
+- Asociatividad.
+- Uso de paréntesis.
+- Operaciones matemáticas estándar.
+
+---
+
+# Generación de código SML
+
+El compilador genera código compatible con **Simpletron Machine Language (SML)**.
+
+El archivo generado puede ser cargado directamente en el simulador para ejecutar el programa convertido.
+
+
+---
+
+# Requisitos
+
+Para compilar y ejecutar el proyecto se requiere:
+
+- Compilador de lenguaje C compatible con estándar C89.
+
+Ejemplos:
+
+- Dev-C++
+- GCC
+- MinGW
+
+---
+
+# Ejecución del programa
+
+El compilador puede ejecutarse mediante dos métodos diferentes.
+
+---
+
+## Opción 1: Ejecución con argumentos
+
+El usuario proporciona directamente el archivo fuente y el archivo de salida que debe de estar en la misma carpeta que el programa.
+
+
+---
+
+## Opción 2: Ejecución sin argumentos
+
+Si el programa se ejecuta sin parámetros, solicitará al usuario los nombres de los archivos.
+
+Ejemplo:
+Archivo fuente:
+programa.simple.txt
+
+Archivo salida:
+salida.sml
+
+
+Al finalizar correctamente mostrará un mensaje: Compilación completada.
+
+
+---
+
+# Archivos principales
+
+## compilador.c
+
+Contiene el código fuente principal del compilador desarrollado en lenguaje C.
+
+Incluye:
+
+- Lectura del programa Simple.
+- Procesamiento de instrucciones.
+- Manejo de tabla de símbolos.
+- Generación de código SML.
+- Control del proceso de dos pasadas.
+
+---
+
+## programa.simple.txt
+
+Archivo utilizado como entrada del compilador.
+
+Contiene el programa escrito en lenguaje Simple que será transformado a SML.
+
+---
+
+## salida.sml
+
+Archivo generado como resultado de la compilación.
+
+Contiene las instrucciones SML listas para ejecutarse en el simulador de Simpletron.
+
+---
+
+# Historial de versiones
+
+## Versión 1.0
+
+Primera implementación del compilador.
+
+Características:
+
+- Primera estructura funcional del compilador.
+- Implementación inicial del proceso de traducción.
+- Presentaba múltiples errores durante la compilación.
+- Existían problemas relacionados con la localización y apertura de archivos.
+- El funcionamiento podía variar dependiendo del equipo donde se ejecutara.
+
+---
+
+## Versión 2.0 (Actual)
+
+Versión corregida y mejorada del compilador.
+
+Mejoras implementadas:
+
+- Corrección del manejo de archivos.
+- Compatibilidad con ejecución mediante argumentos.
+- Solicitud interactiva de archivos cuando no se proporcionan parámetros.
+- Corrección de errores de compilación.
+- Mayor estabilidad general del programa.
+- Generación correcta de archivos SML.
+- Código final preparado para ejecutarse en el simulador de Simpletron.
+
+---
+
+# Programas de prueba
+
+La carpeta incluye programas desarrollados en Simple junto con sus equivalentes generados en SML.
+
+Estos archivos permiten comprobar:
+
+- Correcta traducción del lenguaje Simple.
+- Funcionamiento de las instrucciones implementadas.
+- Generación adecuada del código SML.
+- Ejecución correcta dentro del simulador.
+
